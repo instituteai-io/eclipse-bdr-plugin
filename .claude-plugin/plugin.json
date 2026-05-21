@@ -1,0 +1,8 @@
+{
+  "name": "eclipse-bdr-plugin",
+  "description": "Claude Skills & Agents For Eclipse's BDR",
+  "version": "0.0.1",
+  "author": { "name": "instituteai.io" },
+  "keywords": ["eclipse", "bdr", "regulatory", "sales-development"],
+  "userConfig": {}
+}

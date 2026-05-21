@@ -1,0 +1,20 @@
+{
+  "name": "ai-enabled-eclipse-bdr",
+  "owner": { "name": "instituteai.io" },
+  "metadata": {
+    "description": "Claude Skills & Agents For Eclipse's BDR",
+    "version": "0.0.1"
+  },
+  "plugins": [
+    {
+      "name": "eclipse-bdr-plugin",
+      "description": "Claude Skills & Agents For Eclipse's BDR",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/regulatory-scan-by-source"
+      ],
+      "agents": []
+    }
+  ]
+}
