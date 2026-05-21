@@ -1,6 +1,6 @@
 # Eclipse BDR Plugin
 
-Claude skills and agents for the Eclipse BDR team. Built and maintained by InstituteAI.
+Claude skills and agents for the Eclipse BDR team. Built and maintained by AI Institute.
 
 ## What's inside
 
@@ -20,8 +20,6 @@ In Claude Code or Cowork:
 /plugin marketplace add instituteai-io/eclipse-bdr-plugin
 /plugin install eclipse-bdr-plugin@ai-enabled-eclipse-bdr
 ```
-
-Replace `instituteai-io/eclipse-bdr-plugin` with the actual GitHub `owner/repo` once published.
 
 ## Updates
 
