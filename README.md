@@ -18,7 +18,7 @@ In Claude Code or Cowork:
 
 ```
 /plugin marketplace add instituteai-io/eclipse-bdr-plugin
-/plugin install eclipse-bdr-plugin@ai-enabled-eclipse-bdr
+/plugin install eclipse-bdr-plugin@eclipse-bdr-plugin
 ```
 
 ## Updates

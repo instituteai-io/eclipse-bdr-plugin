@@ -1,5 +1,5 @@
 {
-  "name": "ai-enabled-eclipse-bdr",
+  "name": "eclipse-bdr-plugin",
   "owner": { "name": "instituteai.io" },
   "metadata": {
     "description": "Claude Skills & Agents For Eclipse's BDR",
