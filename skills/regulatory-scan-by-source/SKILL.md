@@ -119,7 +119,44 @@ For each signal with `relevance_score >= 5`, generate:
 
 ---
 
-## Step 6: Return JSON
+## Step 6: Generate CRM Payload
+
+For every signal included in the output (i.e. `relevance_score >= 5` AND `icp_match: true`),
+generate one account entry and one deal entry in `crm_payload`.
+
+**Accounts** — one per unique company name across all included signals:
+- `action`: `upsert`
+- `dedup_field`: `company_name`
+- `industry`: infer from institution type — bank/credit union → `"Banking"`, broker-dealer/investment advisor → `"Financial Services"`, fintech/payments → `"Financial Technology"`, other → `"Financial Services"`
+- `icp_tier`: `null` (not determinable from enforcement data alone — set manually or by enrichment)
+- `apollo_account_id`: `null` (set by `apollo_enrich_account`)
+- `zoominfo_account_id`: `null` (set by `zoominfo_enrich_account`)
+- All other account fields: `null`
+
+**Contacts** — always empty `[]`. Regulatory scan does not create or modify contacts.
+Contacts are surfaced by plays after deal creation.
+
+**Deals** — one per included signal:
+- `action`: `skip_if_exists`
+- `dedup_query`: `"company_name = '<company>' AND signal_source = '<regulator>' AND signal_date = '<date>'"`
+- `deal_name`: `"<company> — Regulatory Action — <YYYY-MM-DD>"`
+- `stage`: `"Signal Detected"`
+- `deal_type`: `"New Logo"`
+- `amount`: `null`
+- `close_date`: 90 days from `scan_date`
+- `lead_source`: `"Regulatory Scan"`
+- `practice_areas`: from `eclipse_assessment.practice_areas`
+- `signal_type`: `"Regulatory Action"`
+- `signal_source`: regulator abbreviation (e.g. `"OCC"`, `"FDIC"`)
+- `signal_date`: enforcement action date
+- `signal_summary`: from `signal.summary`
+- `suggested_approach`: from `eclipse_assessment.recommended_approach`
+- `priority_score`: `relevance_score × 10` (scales 1–10 → 10–100)
+- `play_source`: `"New Opp Discovery"`
+
+---
+
+## Step 7: Return JSON
 
 Output **only** this JSON — no prose before or after unless the user asks for a summary.
 
@@ -154,13 +191,58 @@ Output **only** this JSON — no prose before or after unless the user asks for 
     "high_priority": 0,
     "signals_excluded": 0,
     "exclusion_reason": "<if signals were excluded, explain why>"
+  },
+  "crm_payload": {
+    "generated_by": "regulatory-scan-by-source",
+    "generated_at": "<today YYYY-MM-DD>",
+    "accounts": [
+      {
+        "id": "acc_001",
+        "action": "upsert",
+        "dedup_field": "company_name",
+        "fields": {
+          "company_name": "<institution name>",
+          "industry": "<inferred from institution type>",
+          "icp_tier": null,
+          "apollo_account_id": null,
+          "zoominfo_account_id": null
+        }
+      }
+    ],
+    "contacts": [],
+    "deals": [
+      {
+        "id": "deal_001",
+        "action": "skip_if_exists",
+        "dedup_query": "company_name = '<company>' AND signal_source = '<regulator>' AND signal_date = '<date>'",
+        "fields": {
+          "deal_name": "<company> — Regulatory Action — <YYYY-MM-DD>",
+          "company_name": "<institution name>",
+          "primary_contact": null,
+          "stage": "Signal Detected",
+          "deal_type": "New Logo",
+          "amount": null,
+          "close_date": "<90 days from scan_date>",
+          "lead_source": "Regulatory Scan",
+          "practice_areas": ["<from eclipse_assessment.practice_areas>"],
+          "signal_type": "Regulatory Action",
+          "signal_source": "<regulator abbreviation>",
+          "signal_date": "<enforcement action date>",
+          "signal_summary": "<from signal.summary>",
+          "suggested_approach": "<from eclipse_assessment.recommended_approach>",
+          "priority_score": 0,
+          "play_source": "New Opp Discovery"
+        }
+      }
+    ]
   }
 }
 ```
 
 - Include only signals with `relevance_score >= 5`
-- IDs sequential: `signal_001`, `signal_002`, etc.
-- If page has login wall, is empty, or has no enforcement data: return `signals: []` and explain in `exclusion_reason`
+- IDs sequential: `signal_001`, `signal_002`, etc. — `acc_001`, `acc_002`, etc. — `deal_001`, `deal_002`, etc.
+- One account entry per unique company (deduplicate if same company appears in multiple signals)
+- If page has login wall, is empty, or has no enforcement data: return `signals: []`, `crm_payload.accounts: []`, `crm_payload.deals: []`, and explain in `exclusion_reason`
 
 ---
 
