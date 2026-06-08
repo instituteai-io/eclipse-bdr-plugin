@@ -1,5 +1,5 @@
 ---
-name: signal-job-change-known-lead
+name: bdr-signal-job-change
 description: >
   Detect role changes for known leads already in Zoho CRM. Pulls all leads with a stored
   Apollo Contact ID, checks their current profile in Apollo, and flags any who have changed
@@ -8,7 +8,7 @@ description: >
   Use when asked to check for job changes, detect role transitions in known leads,
   run the job change signal scan, or find prospects who changed companies.
   Triggers on: "check for job changes", "run job change signal", "who changed roles",
-  "role transition scan", "signal-job-change-known-lead".
+  "role transition scan", "bdr-signal-job-change".
 ---
 
 # Eclipse BDR — Signal: Job Change (Known Leads)
@@ -148,7 +148,7 @@ Output **only** this JSON — no prose before or after.
 ```json
 {
   "scan_date": "<today YYYY-MM-DD>",
-  "skill": "signal-job-change-known-lead",
+  "skill": "bdr-signal-job-change",
   "signal_source": "Apollo",
   "criteria_fetched_from": "<URL fetched in Step 1>",
   "summary": {

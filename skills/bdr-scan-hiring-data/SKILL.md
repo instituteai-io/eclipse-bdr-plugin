@@ -1,5 +1,5 @@
 ---
-name: signal-company-hiring-icp-data
+name: bdr-scan-hiring-data
 description: >
   Detect ICP-fit companies that are actively hiring for Data roles. Fetches company ICP
   criteria and target job role keywords from Notion, queries Apollo for companies matching
@@ -9,7 +9,7 @@ description: >
   Use when asked to find companies hiring for data roles, run the hiring signal scan,
   detect data hiring activity at ICP companies, or surface data talent demand signals.
   Triggers on: "run hiring signal scan", "which ICP companies are hiring for data",
-  "data hiring signal", "signal-company-hiring-icp-data".
+  "data hiring signal", "bdr-scan-hiring-data".
 ---
 
 # Eclipse BDR — Signal: Company Hiring (Data Practice)
@@ -165,7 +165,7 @@ Output **only** this JSON — no prose before or after.
 ```json
 {
   "scan_date": "<today YYYY-MM-DD>",
-  "skill": "signal-company-hiring-icp-data",
+  "skill": "bdr-scan-hiring-data",
   "signal_source": "Apollo",
   "criteria_fetched_from": {
     "icp_criteria": "<Page A URL>",
@@ -188,7 +188,7 @@ Output **only** this JSON — no prose before or after.
     }
   ],
   "crm_payload": {
-    "generated_by": "signal-company-hiring-icp-data",
+    "generated_by": "bdr-scan-hiring-data",
     "generated_at": "<today YYYY-MM-DD>",
     "module": "Leads",
     "action": "upsert",

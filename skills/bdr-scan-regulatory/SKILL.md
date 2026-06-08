@@ -1,5 +1,5 @@
 ---
-name: regulatory-scan-by-source
+name: bdr-scan-regulatory
 description: >
   Fetch any regulatory enforcement page URL and extract structured signal objects for
   TeamEclipse BDR outreach. Accepts a URL from OCC, FDIC, CFPB, SEC, FINRA, Federal Reserve,
@@ -193,7 +193,7 @@ Output **only** this JSON — no prose before or after unless the user asks for 
     "exclusion_reason": "<if signals were excluded, explain why>"
   },
   "crm_payload": {
-    "generated_by": "regulatory-scan-by-source",
+    "generated_by": "bdr-scan-regulatory",
     "generated_at": "<today YYYY-MM-DD>",
     "accounts": [
       {

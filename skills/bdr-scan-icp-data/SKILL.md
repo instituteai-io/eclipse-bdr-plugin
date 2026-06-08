@@ -1,5 +1,5 @@
 ---
-name: icp-signal-data
+name: bdr-scan-icp-data
 description: >
   Scan Apollo for ICP contacts in the Data Management practice area. Fetches live search
   criteria from the team's reference page, queries Apollo for matching people, scores each
@@ -131,7 +131,7 @@ Output **only** this JSON — no prose before or after.
 ```json
 {
   "scan_date": "<today YYYY-MM-DD>",
-  "skill": "icp-signal-data",
+  "skill": "bdr-scan-icp-data",
   "signal_source": "Apollo",
   "criteria_fetched_from": "<URL fetched in Step 1>",
   "summary": {
@@ -142,7 +142,7 @@ Output **only** this JSON — no prose before or after.
     "masked_last_names": 0
   },
   "crm_payload": {
-    "generated_by": "icp-signal-data",
+    "generated_by": "bdr-scan-icp-data",
     "generated_at": "<today YYYY-MM-DD>",
     "module": "Leads",
     "action": "upsert",

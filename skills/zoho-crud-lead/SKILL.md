@@ -4,7 +4,7 @@ description: >
   Execute CRUD operations on the Zoho CRM Inbound (Leads) module using a crm_payload
   from any ICP signal skill. Translates generic field names to Zoho API names, runs dedup
   checks, and writes via Zoho MCP. This is the only CRM write skill for people signals —
-  all ICP signal skills (icp-signal-data, icp-signal-risk, icp-signal-transformation,
+  all ICP signal skills (bdr-scan-icp-data, icp-signal-risk, icp-signal-transformation,
   icp-signal-ai) route their output through here.
   Triggers on: "write the leads to CRM", "push to Zoho", "log these contacts to Inbound",
   "commit to CRM", or when a crm_payload with a leads section is present and the user
