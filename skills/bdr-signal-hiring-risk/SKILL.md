@@ -87,7 +87,8 @@ Call `apollo_mixed_companies_search` using company-level criteria from Section A
 Fixed parameters:
 - `per_page`: 25
 
-For each company returned, call `apollo_organizations_job_postings` with the company domain.
+For each company returned, call `apollo_organizations_job_postings` with the company's
+Apollo organization `id` (returned by the company search — the endpoint does not accept domains).
 
 Filter the returned job postings: a posting **matches** if its title contains any keyword
 from `risk_role_keywords` (case-insensitive substring match).

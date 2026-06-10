@@ -7,7 +7,7 @@ description: >
   Data Quality Lead, Data Catalog, Master Data). Data management and data governance are
   treated as one signal; the full keyword list is client-managed in SharePoint, never
   hardcoded here. Fetches company ICP criteria and hiring keyword list fresh from the
-  team's SharePoint reference pages, queries Apollo for companies matching the ICP profile,
+  team's SharePoint reference page, queries Apollo for companies matching the ICP profile,
   checks their active job postings for matching openings, then surfaces ICP-matching
   contacts at those companies as leads for the Inbound (Leads) module. Output is a JSON
   payload ready for the zoho-crud-lead skill.
@@ -26,35 +26,36 @@ governance operating-model roles alike — then find ICP contacts at those compa
 Output is JSON only — hand off to `zoho-crud-lead` to write to Inbound (Leads).
 
 Data management and data governance hiring are **one consolidated signal**. The precision
-distinction lives in the keyword list, which the client manages in SharePoint (Page B) —
+distinction lives in the keyword list, which the client manages in SharePoint (Section B of the reference page) —
 not in separate skills and not hardcoded here.
 
 ---
 
-## ⚠️ Criteria Reference Pages
+## ⚠️ Criteria Reference Page
 
-Two SharePoint files drive this skill. Always fetch both fresh via `read_resource` — never use cached values.
+One reference page drives this skill, carrying both sections. Always fetch it fresh —
+never use cached values.
 
-**Page A — ICP Company & Contact Criteria:**
-`file:///b!ZEjP7U2_7UCmi5bHlWbQqhD0IvI686dAqFFpekklCTTT7yqCdusrTarAzUvLNKPW/015GTRKZBD3MJWJGBVSZA3L4E6BCGSMWQM`
-
-Provides: `titles`, `seniority`, `industries`, `company_size`, `geography`, `include_similar_titles`
-
-**Page B — Hiring Signal Keywords:**
+**Reference — Skill References - Signal: Company Hiring (Data):**
 `file:///b!ZEjP7U2_7UCmi5bHlWbQqhD0IvI686dAqFFpekklCTTT7yqCdusrTarAzUvLNKPW/015GTRKZBF6MTZJ7ZO2BHZRVS6DJNDQ4BO`
 
-Provides: `data_role_keywords` — the full list of job title keywords to match against open
-postings (covers both broad data roles and governance operating-model roles), and
-`min_postings`.
+Fetch fresh via `read_resource` on every run.
 
-If either file is unreachable or empty, stop and tell the user. Do not proceed with
-guessed or hardcoded keywords.
+Provides:
+- **Section A — ICP Company & Contact Criteria:** `titles`, `seniority`, `industries`,
+  `company_size`, `geography`, `include_similar_titles`
+- **Section B — Data Role Keywords:** `data_role_keywords` — the full list of job title
+  keywords to match against open postings (covers both broad data roles and governance
+  operating-model roles), and `min_postings`
+
+If the reference page is unreachable or empty, stop and tell the user. Do not proceed
+with guessed or hardcoded criteria or keywords.
 
 ---
 
 ## Step 1: Fetch Criteria
 
-**From Page A**, extract:
+**From Section A**, extract:
 - `titles` — ICP contact titles to find at hiring companies
 - `seniority` — seniority levels
 - `industries` — industry filters
@@ -62,7 +63,7 @@ guessed or hardcoded keywords.
 - `geography` — locations
 - `include_similar_titles`
 
-**From Page B**, extract:
+**From Section B**, extract:
 - `data_role_keywords` — keywords to match against job posting titles (case-insensitive
   substring match)
 - `min_postings` — minimum number of matching postings to qualify a company as a
@@ -72,7 +73,7 @@ guessed or hardcoded keywords.
 
 ## Step 2: Find ICP Companies with Data Job Postings
 
-Call `apollo_mixed_companies_search` using company-level criteria from Page A:
+Call `apollo_mixed_companies_search` using company-level criteria from Section A:
 
 | Criteria field | Apollo parameter |
 |---|---|
@@ -83,7 +84,8 @@ Call `apollo_mixed_companies_search` using company-level criteria from Page A:
 Fixed parameters:
 - `per_page`: 25
 
-For each company returned, call `apollo_organizations_job_postings` with the company domain.
+For each company returned, call `apollo_organizations_job_postings` with the company's
+Apollo organization `id` (returned by the company search — the endpoint does not accept domains).
 
 Filter the returned job postings: a posting **matches** if its title contains any keyword
 from `data_role_keywords` (case-insensitive substring match).
@@ -100,8 +102,8 @@ For each hiring signal company, call `apollo_mixed_people_api_search` to find co
 
 | Criteria field | Apollo parameter |
 |---|---|
-| `titles` (from Page A) | `person_titles` |
-| `seniority` (from Page A) | `person_seniorities` |
+| `titles` (from Section A) | `person_titles` |
+| `seniority` (from Section A) | `person_seniorities` |
 | company domain | `q_organization_domains` |
 | `include_similar_titles` | `include_similar_titles` |
 
@@ -190,8 +192,7 @@ Output **only** this JSON — no prose before or after.
   "skill": "bdr-signal-hiring-data",
   "signal_source": "Apollo",
   "criteria_fetched_from": {
-    "icp_criteria": "<Page A URL>",
-    "hiring_keywords": "<Page B URL>"
+    "reference_page": "<reference page URL/URI>"
   },
   "summary": {
     "companies_scanned": 0,
@@ -273,5 +274,5 @@ program.
 
 **History:** Consolidated from two earlier skills (`bdr-scan-hiring-data`, broad data roles;
 `bdr-scan-hiring-governance`, governance subset). The split proved artificial — the
-client-managed SharePoint keyword list (Page B) already spans both role families, so precision
+client-managed SharePoint keyword list already spans both role families, so precision
 is tuned there, not via separate skills.
