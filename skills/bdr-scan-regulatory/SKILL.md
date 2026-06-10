@@ -5,7 +5,8 @@ description: >
   TeamEclipse BDR outreach. Accepts a URL from OCC, FDIC, CFPB, SEC, FINRA, Federal Reserve,
   NCUA, or any other regulatory body. Auto-detects the source, extracts enforcement actions,
   scores each one against Eclipse's ICP (data, risk, compliance, financial crime consulting),
-  and returns structured JSON signals ready for Zoho CRM input.
+  and returns structured JSON signals plus a ready-to-send newsletter digest. This is a
+  company-level signal — it does NOT write to Zoho; output is a report for email / team chat.
   Use when the user pastes a regulatory enforcement URL and asks to scan it, run the enforcement
   scan, check for signals, or review enforcement actions. Triggers on: "scan this page",
   "run the regulatory scan", "what signals are here", "check this enforcement action",
@@ -119,40 +120,28 @@ For each signal with `relevance_score >= 5`, generate:
 
 ---
 
-## Step 6: Generate CRM Payload
+## Step 6: Build the Newsletter Digest
 
-For every signal included in the output (i.e. `relevance_score >= 5` AND `icp_match: true`),
-generate one account entry and one deal entry in `crm_payload`.
+This skill does **not** write to Zoho and produces **no** `crm_payload` (no Accounts, no Deals —
+Zoho is the Leads-only Inbound module, written exclusively by person-level skills). Instead,
+assemble a `digest` object for an email or team-chat post. Include only signals with
+`relevance_score >= 5` AND `icp_match: true`, sorted by `relevance_score` descending.
 
-**Accounts** — one per unique company name across all included signals:
-- `action`: `upsert`
-- `dedup_field`: `company_name`
-- `industry`: infer from institution type — bank/credit union → `"Banking"`, broker-dealer/investment advisor → `"Financial Services"`, fintech/payments → `"Financial Technology"`, other → `"Financial Services"`
-- `icp_tier`: `null` (not determinable from enforcement data alone — set manually or by enrichment)
-- `apollo_account_id`: `null` (set by `apollo_enrich_account`)
-- `zoominfo_account_id`: `null` (set by `zoominfo_enrich_account`)
-- All other account fields: `null`
+Render `digest.markdown` like this (one block per signal):
 
-**Contacts** — always empty `[]`. Regulatory scan does not create or modify contacts.
-Contacts are surfaced by plays after deal creation.
+```
+## Regulatory Enforcement Signals — <scan_date>
+Source: <regulator> — <source_url>
 
-**Deals** — one per included signal:
-- `action`: `skip_if_exists`
-- `dedup_query`: `"company_name = '<company>' AND signal_source = '<regulator>' AND signal_date = '<date>'"`
-- `deal_name`: `"<company> — Regulatory Action — <YYYY-MM-DD>"`
-- `stage`: `"Signal Detected"`
-- `deal_type`: `"New Logo"`
-- `amount`: `null`
-- `close_date`: 90 days from `scan_date`
-- `lead_source`: `"Regulatory Scan"`
-- `practice_areas`: from `eclipse_assessment.practice_areas`
-- `signal_type`: `"Regulatory Action"`
-- `signal_source`: regulator abbreviation (e.g. `"OCC"`, `"FDIC"`)
-- `signal_date`: enforcement action date
-- `signal_summary`: from `signal.summary`
-- `suggested_approach`: from `eclipse_assessment.recommended_approach`
-- `priority_score`: `relevance_score × 10` (scales 1–10 → 10–100)
-- `play_source`: `"New Opp Discovery"`
+### 🔹 <Company> — <action_type> (score <relevance_score>/10, <urgency>)
+**What happened:** <signal.summary>
+**Practice areas:** <comma-separated practice_areas>
+**Eclipse wedge:** <wedge>
+**Suggested approach:** <recommended_approach>
+[Source](<source_url>)
+```
+
+> **Delivery format is TBD** (email vs. team chat). Keep `digest.markdown` clean and channel-neutral; `digest.channel` is a placeholder until the team picks the channel.
 
 ---
 
@@ -163,6 +152,8 @@ Output **only** this JSON — no prose before or after unless the user asks for 
 ```json
 {
   "scan_date": "<today YYYY-MM-DD>",
+  "skill": "bdr-scan-regulatory",
+  "output_type": "digest",
   "source_url": "<the URL that was scanned>",
   "regulator": "<OCC|FDIC|CFPB|SEC|FINRA|Federal Reserve|NCUA|Unknown>",
   "signals": [
@@ -192,57 +183,19 @@ Output **only** this JSON — no prose before or after unless the user asks for 
     "signals_excluded": 0,
     "exclusion_reason": "<if signals were excluded, explain why>"
   },
-  "crm_payload": {
-    "generated_by": "bdr-scan-regulatory",
-    "generated_at": "<today YYYY-MM-DD>",
-    "accounts": [
-      {
-        "id": "acc_001",
-        "action": "upsert",
-        "dedup_field": "company_name",
-        "fields": {
-          "company_name": "<institution name>",
-          "industry": "<inferred from institution type>",
-          "icp_tier": null,
-          "apollo_account_id": null,
-          "zoominfo_account_id": null
-        }
-      }
-    ],
-    "contacts": [],
-    "deals": [
-      {
-        "id": "deal_001",
-        "action": "skip_if_exists",
-        "dedup_query": "company_name = '<company>' AND signal_source = '<regulator>' AND signal_date = '<date>'",
-        "fields": {
-          "deal_name": "<company> — Regulatory Action — <YYYY-MM-DD>",
-          "company_name": "<institution name>",
-          "primary_contact": null,
-          "stage": "Signal Detected",
-          "deal_type": "New Logo",
-          "amount": null,
-          "close_date": "<90 days from scan_date>",
-          "lead_source": "Regulatory Scan",
-          "practice_areas": ["<from eclipse_assessment.practice_areas>"],
-          "signal_type": "Regulatory Action",
-          "signal_source": "<regulator abbreviation>",
-          "signal_date": "<enforcement action date>",
-          "signal_summary": "<from signal.summary>",
-          "suggested_approach": "<from eclipse_assessment.recommended_approach>",
-          "priority_score": 0,
-          "play_source": "New Opp Discovery"
-        }
-      }
-    ]
+  "digest": {
+    "format": "newsletter",
+    "channel": "TBD (email | team chat)",
+    "title": "Regulatory Enforcement Signals — <scan_date>",
+    "markdown": "<rendered digest per Step 6 — one block per included signal, high-priority first>"
   }
 }
 ```
 
-- Include only signals with `relevance_score >= 5`
-- IDs sequential: `signal_001`, `signal_002`, etc. — `acc_001`, `acc_002`, etc. — `deal_001`, `deal_002`, etc.
-- One account entry per unique company (deduplicate if same company appears in multiple signals)
-- If page has login wall, is empty, or has no enforcement data: return `signals: []`, `crm_payload.accounts: []`, `crm_payload.deals: []`, and explain in `exclusion_reason`
+- Include only signals with `relevance_score >= 5` AND `icp_match: true`
+- IDs sequential: `signal_001`, `signal_002`, etc.
+- This skill never writes to Zoho and never hands off to `zoho-crud-lead`
+- If page has login wall, is empty, or has no enforcement data: return `signals: []`, an empty `digest.markdown`, and explain in `exclusion_reason`
 
 ---
 
