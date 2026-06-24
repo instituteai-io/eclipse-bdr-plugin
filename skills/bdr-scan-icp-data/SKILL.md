@@ -18,10 +18,11 @@ Scan Apollo for contacts matching Eclipse's Data Management ICP. Output is JSON 
 
 ## ⚠️ Criteria Reference Page
 
-**Source (SharePoint):** `file:///b!ZEjP7U2_7UCmi5bHlWbQqhD0IvI686dAqFFpekklCTTT7yqCdusrTarAzUvLNKPW/015GTRKZBD3MJWJGBVSZA3L4E6BCGSMWQM`
+**Source (Notion):** `https://app.notion.com/p/08e4e4751c3a83fea21781c4264c7705`
+(page *Skill References - ICP Signal Data*, in the **Skill References** database)
 
-Fetch via `read_resource` with the URI above. This is the single source of truth for search
-criteria. Always fetch it fresh — never use remembered or cached criteria from a prior run.
+Fetch via the Notion MCP `notion-fetch` tool with the URL above. This is the single source of
+truth for search criteria. Always fetch it fresh — never use remembered or cached criteria from a prior run.
 If unreachable, stop and tell the user.
 
 ---

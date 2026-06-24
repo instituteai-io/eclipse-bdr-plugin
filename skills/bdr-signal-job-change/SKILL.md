@@ -20,9 +20,10 @@ Updates existing records — never creates new ones. Output is JSON only.
 
 ## ⚠️ Criteria Reference Page
 
-**Source (SharePoint):** `file:///b!ZEjP7U2_7UCmi5bHlWbQqhD0IvI686dAqFFpekklCTTT7yqCdusrTarAzUvLNKPW/015GTRKZBUI4OYNOUY5RE2GN4R4FRCBJBH`
+**Source (Notion):** `https://app.notion.com/p/7de4e4751c3a83da9ecf8121e82532a7`
+(page *Skill References - Signal: Job Change (Known Leads)*, in the **Skill References** database)
 
-Fetch via `read_resource` with the URI above. This page defines:
+Fetch via the Notion MCP `notion-fetch` tool with the URL above. This page defines:
 - Which Zoho Lead fields to compare against Apollo (e.g. `Company`, `Designation`)
 - What qualifies as a "significant" change worth flagging
 - Any lead filters to apply before running (e.g. only check leads created in the last N days,

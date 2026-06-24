@@ -3,7 +3,7 @@ name: bdr-scan-vendor
 description: >
   Fetch any data-tooling vendor's customer page, case study, press release, or event page and
   extract the companies named in it as Vendor Adoption signals for TeamEclipse BDR outreach.
-  Covers the vendors in the team-maintained SharePoint reference table — data catalogs (Collibra,
+  Covers the vendors in the team-maintained Notion reference table — data catalogs (Collibra,
   Alation, Atlan, Purview), privacy (BigID, Immuta, OneTrust), MDM (Informatica, Reltio,
   Profisee), data quality/observability (Monte Carlo, Ataccama), lineage (Manta, Solidatus),
   cloud data platforms (Snowflake, Databricks, Fabric), and regulatory reporting (AxiomSL,
@@ -45,13 +45,13 @@ reporting modernization, and ETL/cloud migration — all detected through vendor
 Two external references drive this skill. Always fetch both fresh — never use cached values and
 never fall back to a built-in vendor list.
 
-**Page A — Vendor Table (SharePoint): Skill References - Signal Vendor Adoption** — fetch via
-`read_resource`:
-`file:///b!ZEjP7U2_7UCmi5bHlWbQqhD0IvI686dAqFFpekklCTTT7yqCdusrTarAzUvLNKPW/015GTRKZE244FO7ZTJTFGJQOECUI4RB2M5`
+**Page A — Vendor Table (Notion): Skill References - Signal Vendor Adoption** — fetch via the
+Notion MCP `notion-fetch` tool:
+`https://app.notion.com/p/b0d4e4751c3a8320b9ef011a9a975642`
+(in the **Skill References** database)
 
-If that URI fails (file moved or re-uploaded), locate it with `sharepoint_search` (query:
-`"Skill References - Signal Vendor Adoption"`, folderName: `"Skill References"`) and read the
-URI it returns instead.
+If that URL fails (page moved or renamed), locate it with `notion-search` (query:
+`"Skill References - Signal Vendor Adoption"`) and read the page it returns instead.
 
 Provides three sections:
 

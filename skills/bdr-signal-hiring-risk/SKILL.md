@@ -38,10 +38,11 @@ client-managed in the reference page.
 One reference page drives this skill, carrying both sections. Always fetch it fresh —
 never use cached values.
 
-**Reference — Skill References - Signal: Company Hiring (Risk):**
-`file:///b!ZEjP7U2_7UCmi5bHlWbQqhD0IvI686dAqFFpekklCTTT7yqCdusrTarAzUvLNKPW/015GTRKZENHSJMWPS43NBIHBXYDMDOEMHE`
+**Reference (Notion) — Skill References - Signal: Company Hiring (Risk):**
+`https://app.notion.com/p/6ce4e4751c3a8331828b818f9efe37b4`
+(in the **Skill References** database)
 
-Fetch fresh via `read_resource` on every run.
+Fetch fresh via the Notion MCP `notion-fetch` tool on every run.
 
 Provides:
 - **Section A — ICP Company & Contact Criteria:** `titles`, `seniority`, `industries`,
