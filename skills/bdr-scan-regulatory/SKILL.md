@@ -7,11 +7,15 @@ description: >
   scores each one against Eclipse's ICP (data, risk, compliance, financial crime consulting),
   and returns structured JSON signals plus a ready-to-send newsletter digest. This is a
   company-level signal — it does NOT write to Zoho; output is a report for email / team chat.
+  Two modes: by default (no URL given) it sweeps the full regulator source list curated on the
+  team's Notion reference page ("Signal: Regulatory Enforcement Sources") — this is the weekly
+  scheduled cadence; passing one or more URLs scans just those.
   Use when the user pastes a regulatory enforcement URL and asks to scan it, run the enforcement
-  scan, check for signals, or review enforcement actions. Triggers on: "scan this page",
-  "run the regulatory scan", "what signals are here", "check this enforcement action",
-  "regulatory enforcement scan", or any URL from a known regulator domain (sec.gov,
-  consumerfinance.gov, occ.gov, fdic.gov, finra.org, federalreserve.gov, ncua.gov).
+  scan, sweep all regulators, check for signals, or review enforcement actions. Triggers on:
+  "scan this page", "run the regulatory scan", "sweep the regulators", "what signals are here",
+  "check this enforcement action", "regulatory enforcement scan", or any URL from a known
+  regulator domain (sec.gov, consumerfinance.gov, occ.gov, fdic.gov, finra.org,
+  federalreserve.gov, ncua.gov, fincen.gov, ofac.treasury.gov, dfs.ny.gov).
 ---
 
 # Eclipse BDR — Regulatory Scan by Source
@@ -21,19 +25,49 @@ Eclipse's ICP, and return structured JSON signals ready for BDR outreach.
 
 ---
 
-## Step 1: Confirm the URL
+## ⚠️ Source Reference Page
 
-The user must provide a URL. If none was given, ask:
+The list of regulators and the URLs to sweep are **not hardcoded** — they are curated by the team on
+the **Signal: Regulatory Enforcement Sources** Notion page (in the **Skill References** database):
+`https://app.notion.com/p/38e4e4751c3a81cba046cc0735359dea`
 
-> "Please paste the URL of the regulatory enforcement page you'd like me to scan."
+Fetch it fresh via the Notion MCP `notion-fetch` tool at the start of every **sweep**. If that URL
+fails (page moved/renamed), locate it with `notion-search` (query:
+`"Signal: Regulatory Enforcement Sources"`) and read the page it returns instead.
 
-Accept one or more URLs. If multiple, process each and merge into one output.
+The page provides the **Source Table** (one row per regulator: Sweep URL, **Fetch method**,
+domain(s), action types to look for, fetch caveats) plus the Fetch Methods key, the freshness window,
+and any extra one-off URLs. The **Fetch method** column tells you how to fetch each source — see
+Step 3 (some regulators bot-block or time out a plain WebFetch and need `curl + UA`). This skill
+carries only the piping (fetch → extract → score → digest); the team owns *which* sources to watch by
+editing the page — no skill change needed.
+
+If the page is unreachable or empty in sweep mode, **stop and tell the user** — do not fall back to a
+guessed source list. (Manual mode does not need the page; see Step 1.)
+
+---
+
+## Step 1: Pick the Mode
+
+**Sweep mode (default)** — the skill was invoked with no URL. This is the normal weekly cadence.
+Fetch the Source Reference Page, then scan every **Sweep URL** in its Source Table (skip rows whose
+URL is `TBD` or marked unfetchable). Apply the page's **freshness window** — by default keep only
+actions dated within the **last 7 days** so the weekly digest doesn't repeat itself (widen to 30–90
+days for an on-demand catch-up). Merge all sources into one ranked output. Report any URL that fails
+to fetch in `summary.exclusion_reason` rather than stopping the sweep. Do not ask the user for a URL.
+
+**Manual mode** — the user passed one or more URLs. Scan only those; process each and merge into one
+output. Skip the freshness window (the user asked about these specific pages and wants everything on
+them). Only ask for a URL if the user clearly meant a specific page ("scan this page") but none came
+through.
 
 ---
 
 ## Step 2: Detect the Source
 
-Match the URL domain to a known regulator:
+Match each URL's domain to a known regulator. Prefer the **Source Table** from the reference page
+(its rows carry the regulator, action types, and fetch caveats); the table below is a fallback if the
+page is unavailable in manual mode:
 
 | Domain pattern | Regulator | Action types to look for |
 |---|---|---|
@@ -43,6 +77,9 @@ Match the URL domain to a known regulator:
 | `fdic.gov` | FDIC | Consent orders, civil money penalties, terminations of insurance |
 | `finra.org` | FINRA | Disciplinary actions, firm-level fines and suspensions |
 | `federalreserve.gov` | Federal Reserve | Enforcement actions against bank holding companies |
+| `fincen.gov` | FinCEN | BSA/AML enforcement, civil money penalties |
+| `ofac.treasury.gov` | OFAC | Sanctions enforcement / settlement agreements |
+| `dfs.ny.gov` | NYDFS | Consent orders, civil money penalties (NY-regulated FIs) |
 | `ncua.gov` | NCUA | Enforcement actions against credit unions |
 | Other | Unknown | Attempt generic extraction |
 
@@ -50,7 +87,25 @@ Match the URL domain to a known regulator:
 
 ## Step 3: Fetch and Extract
 
-Use WebFetch to retrieve the page. Extract enforcement actions using source-specific logic.
+Fetch each Sweep URL using the **Fetch method** its row specifies on the reference page (many
+regulators bot-block or time out a plain WebFetch — the method column is how the page records the
+workaround):
+
+- **`WebFetch`** (default) — retrieve with the WebFetch tool (reads server-rendered HTML and RSS/XML).
+  In manual mode, always use WebFetch first.
+- **`curl + UA`** — for sources flagged this way (currently SEC, OFAC, FinCEN: SEC returns HTTP 403
+  without a declared User-Agent; OFAC/FinCEN time out WebFetch on slow origins). Fetch with a Bash
+  `curl` that sets a descriptive User-Agent and follows redirects, then parse the returned HTML:
+  `curl -sL -A "EclipseBDR/1.0 (contact: <team email>)" -m 45 "<Sweep URL>"`
+  (use `-L` especially for FinCEN, whose URL 301-redirects). If a `WebFetch` source fails in a way
+  that looks like a bot-block (403) or timeout, retry it once with this curl method before recording
+  it as failed.
+
+**RSS sources** (FRB, OCC, FDIC) return a feed of headlines: identify the relevant item (e.g. OCC's
+monthly "OCC Announces Enforcement Actions for <Month>", FDIC's "FDIC Publishes <Month> Enforcement
+Actions"), then fetch that item's linked news-release page for the per-institution detail.
+
+Extract enforcement actions using source-specific logic.
 
 **SEC (`sec.gov`)** — Look for litigation releases, administrative proceedings, press releases. Extract per item: respondent/firm name, case number, date filed, violation type, penalty amount, charge summary. Prefer firm-level actions over named individuals.
 
@@ -153,9 +208,11 @@ Output **only** this JSON — no prose before or after unless the user asks for 
 {
   "scan_date": "<today YYYY-MM-DD>",
   "skill": "bdr-scan-regulatory",
+  "mode": "sweep | manual",
   "output_type": "digest",
-  "source_url": "<the URL that was scanned>",
-  "regulator": "<OCC|FDIC|CFPB|SEC|FINRA|Federal Reserve|NCUA|Unknown>",
+  "source_url": "<the URL scanned in manual mode, or 'sweep' for a full-list run>",
+  "sources_swept": ["<Sweep URL 1>", "<Sweep URL 2>"],
+  "regulator": "<single regulator abbreviation, or 'multiple' for a sweep>",
   "signals": [
     {
       "id": "signal_001",
@@ -194,6 +251,11 @@ Output **only** this JSON — no prose before or after unless the user asks for 
 
 - Include only signals with `relevance_score >= 5` AND `icp_match: true`
 - IDs sequential: `signal_001`, `signal_002`, etc.
+- In **sweep mode**: set `source_url` to `"sweep"`, list every fetched URL in `sources_swept`, set
+  `regulator` to `"multiple"` (each signal still carries its own `regulator`), apply the freshness
+  window, and roll any failed-to-fetch URLs into `exclusion_reason` instead of stopping
+- Deduplicate companies across sources: if the same institution appears in multiple actions, keep one
+  signal entry and note the others in its `summary`
 - This skill never writes to Zoho and never hands off to `zoho-crud-lead`
 - If page has login wall, is empty, or has no enforcement data: return `signals: []`, an empty `digest.markdown`, and explain in `exclusion_reason`
 
