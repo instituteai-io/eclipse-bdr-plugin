@@ -179,6 +179,21 @@ Output **only** this JSON — no prose before or after unless the user asks for 
 
 ---
 
+## 🏃 Run Logging
+
+This skill is a building block: when invoked by another Eclipse BDR skill, the **calling** skill
+owns the Output Standard (templated report, Skill Runs log, Teams summary) — do not log or post
+separately from here.
+
+When invoked **standalone by a user**, log the invocation to the **Skill Runs** database
+(`https://app.notion.com/p/3874e4751c3a8084a89be17b28e4c6a1`, data source
+`collection://3874e475-1c3a-80a1-8ed7-000ba308ec09`) via `notion-create-pages`: Name =
+`bdr-fetch-contacts-from-company — <YYYY-MM-DD> — <what was done>`, Select =
+`bdr-fetch-contacts-from-company`, Type = `live run` or `test run`, body = a short note of the
+request and result. No Teams post is required for standalone utility runs.
+
+---
+
 ## Eclipse Context
 
 **Client:** TeamEclipse — data, risk, compliance, financial crime consulting for FIs.

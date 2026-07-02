@@ -65,6 +65,22 @@ curl -s -o /dev/null -w "%{http_code}" -X POST \
 
 ---
 
+## 🏃 Run Logging
+
+This skill is a building block: when invoked by another Eclipse BDR skill, the **calling** skill
+owns the Output Standard (templated report, Skill Runs log, Teams summary) — do not log or post
+separately from here. Never log the routine posts this skill delivers on behalf of other skills —
+only standalone user-requested posts.
+
+When invoked **standalone by a user**, log the invocation to the **Skill Runs** database
+(`https://app.notion.com/p/3874e4751c3a8084a89be17b28e4c6a1`, data source
+`collection://3874e475-1c3a-80a1-8ed7-000ba308ec09`) via `notion-create-pages`: Name =
+`bdr-post-to-teams — <YYYY-MM-DD> — <what was done>`, Select = `bdr-post-to-teams`, Type =
+`live run` or `test run`, body = a short note of the request and result. No Teams post is
+required for standalone utility runs.
+
+---
+
 ## Notes
 
 - The webhook delivers to a specific channel configured in Power Automate — no routing parameter needed.

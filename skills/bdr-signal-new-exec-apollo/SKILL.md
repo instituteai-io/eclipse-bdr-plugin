@@ -17,6 +17,9 @@ description: >
   executive sponsor scan, or find leadership-change signals via Apollo.
   Triggers on: "run the new exec scan", "who just became CDO/CRO at an ICP company", "new executive
   sponsor signal", "leadership change signal via apollo", "bdr-signal-new-exec-apollo".
+  Every run renders the standardized Notion output template, computes live signal/source coverage
+  from the Signal & Source Library, logs the run to the Skill Runs database, and posts a summary
+  to Teams.
 ---
 
 # Eclipse BDR — Signal: New Executive Sponsor (Apollo)
@@ -24,8 +27,13 @@ description: >
 Surface a **newly appointed executive sponsor** at an ICP company — a new CDO / CDAO / CRO / CCO / COO /
 Chief Transformation Officer / Chief AI Officer / CIO or function head. A new leader runs a current-state
 assessment, sets a 90-day agenda, and brings in outside help to move fast — the prime outreach window
-before incumbent advisors entrench. Output is JSON only — hand off to `zoho-crud-lead` to write to
-Inbound (Leads).
+before incumbent advisors entrench. The JSON payload is the data handoff to `zoho-crud-lead` (which
+writes to Inbound (Leads)); the user-facing deliverable is the templated report
+(see 📐 Output Standard).
+
+> **Signal coverage:** computed fresh from the Signal Library on every run — never hardcoded.
+> Every run ends with the standardized report, a Skill Runs log entry in Notion, and a Teams
+> summary. See **📐 Output Standard** below.
 
 This is a **person-level** signal (a specific new executive is the lead), so qualified hits are written
 to Zoho Leads. It is the net-new counterpart to `bdr-signal-job-change`, which only tracks executives
@@ -188,7 +196,8 @@ and the confirmation flag:
 
 ## Step 8: Return JSON
 
-Output **only** this JSON — no prose before or after.
+Assemble this JSON payload — it feeds the Skill Runs log and the `zoho-crud-lead` handoff. The
+user-facing deliverable is the templated report (see 📐 Output Standard).
 
 ```json
 {
@@ -255,6 +264,93 @@ Output **only** this JSON — no prose before or after.
 - `meta` block is for human review only — not written to Zoho
 - If no qualifying executives found: return empty `leads: []`
 - Never write a lead whose `role_age_days` is `null` or outside the window — those are not confirmed appointments
+
+---
+
+## 📐 Output Standard (mandatory — every run)
+
+Every run of this skill ends by rendering a standardized report, logging the run to Notion, and
+posting a summary to Microsoft Teams. Nothing in this section is hardcoded: signal coverage,
+source scoring, and the report format are all fetched fresh from Notion on every run.
+
+### A. Fetch the output template (format authority)
+
+Fetch this page fresh at the start of every run (Notion MCP `notion-fetch`):
+
+**Output Template — Person-Level Leads** — `https://app.notion.com/p/3914e4751c3a8145acd0e21886c316fe`
+(in the **Skill References** database)
+
+The rendered run report must follow that page exactly — its Run Header, Sources Used table,
+Findings blocks, Run Summary, Skill Runs logging spec, and Teams summary spec. If the URL fails,
+locate the page with `notion-search` (query: `"Output Template — Person-Level Leads"`). If it is
+still unavailable, render the report with the same section order (Header → Sources → Findings →
+Summary) and flag in the output that the template could not be fetched.
+
+### B. Compute signal coverage (never hardcode)
+
+This skill's detection mechanism: newly appointed executive sponsors at ICP companies, inferred
+from each candidate's current-role start date via the Apollo people search plus people-match
+enrichment.
+
+Resolve which Signal Library signals this run covers — fresh, on every run:
+
+1. Query the **Signal Library** data source
+   (`collection://3904e475-1c3a-8085-8c1e-000b40a34f87`, on the **02_Signal & Source Library**
+   page `https://app.notion.com/p/3904e4751c3a80b98da7c6bac9ca34c7`) with `notion-search` scoped
+   via `data_source_url`, using this skill's own name (`bdr-signal-new-exec-apollo`) and these
+   coverage terms: `"new executive sponsor"`, `"leadership change"`, `"newly appointed"`,
+   `"executive appointment"`, `"new leader"`. (SQL via `notion-query-data-sources` is plan-gated
+   on this workspace — do not rely on it.)
+2. `notion-fetch` each candidate row. A row is **covered** if its Skill Coverage property
+   (currently named `TEMP - Skill Coverage`) names this skill, or its `Signal Definition` /
+   `Observable Evidence` clearly matches the detection mechanism above.
+3. Render the header line `**Coverage:** SIG-0XX — <Signal Name>; …` and keep each covered row's
+   **Why It Matters**, **Hidden Hypothesis**, **Eclipse Wedge**, **Recommended Disposition**, and
+   **Target Personas** — the report's Findings blocks must be grounded in these fields, not in
+   invented framing.
+
+If no row matches, render `**Coverage:** none mapped in Signal Library` and flag it for the team
+in the report and the Teams summary.
+
+### C. Compute source & source-type scoring (never hardcode)
+
+For every source actually consulted this run (the Apollo platform: people search + people-match
+enrichment), build the template's **Sources Used** table:
+
+1. Resolve the source in the **Source Catalog**
+   (`collection://2485d7c1-f09c-46a4-abed-e6991c6932d8`) by `Source URL` or `Source Name`
+   (scoped `notion-search`, then `notion-fetch` the row) → get its `SRC-0XX` Source ID.
+2. Follow the row's **Source Type** relation into **Source Type Scoring**
+   (`collection://3904e475-1c3a-809b-92f8-000b78de539f`) and report the Source Type plus its
+   **Default Confidence Score**, **Default Source Reliability**, and **Default Signal Strength**.
+   If the Source Catalog row carries its own `Source Reliability` / `Default Source Strength`,
+   those per-source values override the type defaults.
+3. A consulted source with no Source Catalog row is still listed, flagged `⚠️ uncataloged`, with
+   best-judgment scores and a note asking the team to add it to the Source Catalog.
+
+Cache these lookups within a run (one lookup per distinct source) — never across runs.
+
+### D. Log the run to Skill Runs (Notion — mandatory, test runs included)
+
+Create one page per run in the **Skill Runs** database
+(`https://app.notion.com/p/3874e4751c3a8084a89be17b28e4c6a1`, data source
+`collection://3874e475-1c3a-80a1-8ed7-000ba308ec09`) via `notion-create-pages`:
+
+- **Name:** `bdr-signal-new-exec-apollo — <YYYY-MM-DD> — <short descriptor of the outcome>`
+- **Select:** `bdr-signal-new-exec-apollo`
+- **Multi-select:** provider(s) actually used this run (`Apollo`)
+- **Type:** `live run` (or `test run` for dry runs / tests)
+- **Page body:** the full rendered report from section A, followed by a toggle block containing
+  the run's raw JSON output.
+
+Keep the created page's URL — the Teams summary links to it.
+
+### E. Post the run summary to Teams (mandatory)
+
+Compose the short summary exactly per the template's Teams section (bold headline, 1-sentence
+outcome, top-3 bullets, link to the Skill Runs page) and deliver it by invoking the
+**bdr-post-to-teams** skill. Post even when the run found nothing — a clean-scan note with the
+coverage line is still a result.
 
 ---
 

@@ -17,6 +17,9 @@ description: >
   Triggers on: "run the pain-point scan", "data/risk/transformation/AI pain points via zoominfo",
   "who has compliance pain points", "pain point scoops for <practice>", "pseudo-intent signal",
   "bdr-signal-painpoint-zoominfo".
+  Every run renders the standardized Notion output template, computes live signal/source coverage
+  from the Signal & Source Library, logs the run to the Skill Runs database, and posts a summary
+  to Teams.
 ---
 
 # Eclipse BDR — Signal: Pain Point — ZoomInfo (per-practice)
@@ -24,6 +27,10 @@ description: >
 Surface ICP-fit companies signalling demand via ZoomInfo Scoops of type **`Pain Point`** and
 **`Project`**, for **one Eclipse practice per run**. The detection mechanism is identical across
 practices — only the **reference file** changes. Output is a **newsletter / outreach-brief digest**.
+
+> **Signal coverage:** computed fresh from the Signal Library on every run — never hardcoded.
+> Every run ends with the standardized report, a Skill Runs log entry in Notion, and a Teams
+> summary. See **📐 Output Standard** below.
 
 This is a **company-level** signal skill — it **does not write to Zoho** (Zoho is Leads-only). After
 qualifying companies, it surfaces the **enriched ICP contacts** at each by calling
@@ -184,8 +191,11 @@ no ICP-title contacts, note it — don't drop the company.
 
 ## Step 6: Build the Digest / Outreach Brief
 
-No Zoho writes, no `crm_payload`. Assemble the `digest` for email / team chat as a **single table** —
-include only signals with `relevance_score >= 5`, sorted by score desc. Columns:
+No Zoho writes, no `crm_payload`. Assemble the `digest` as a **single table** — include only signals
+with `relevance_score >= 5`, sorted by score desc. Delivery is the Microsoft Teams summary via
+**bdr-post-to-teams**, with the full report on the run's Skill Runs page; the rendered format is
+governed by the output template page fetched per section A of 📐 Output Standard (the table below is
+the fallback shape). Columns:
 
 `| Company | Type | Signal | Eclipse wedge | ICP contacts (enriched) |`
 
@@ -206,7 +216,9 @@ outreach angle.
 
 ## Step 7: Return JSON
 
-Output **only** this JSON — no prose before or after unless the user asks for a summary.
+Assemble this JSON payload — it feeds the Skill Runs log (embedded in a toggle block on the run's
+page) and any downstream handoff. The user-facing deliverable is the templated report plus the
+Skill Runs log entry and the Microsoft Teams summary (see 📐 Output Standard).
 
 ```json
 {
@@ -254,7 +266,7 @@ Output **only** this JSON — no prose before or after unless the user asks for 
   },
   "digest": {
     "format": "newsletter",
-    "channel": "TBD (email | team chat)",
+    "channel": "Microsoft Teams (via bdr-post-to-teams)",
     "title": "Pain-Point Signals — <Practice> (ZoomInfo) — <scan_date>",
     "markdown": "<rendered digest per Step 6 — the single table, one row per company, high-priority first>"
   }
@@ -283,6 +295,93 @@ Output **only** this JSON — no prose before or after unless the user asks for 
   proxy without the license. Live proof (2026-06-24): Rabobank "planning AI-driven compliance and
   risk management over the next three months" (Project); FCMB regulatory-verification delay (Pain
   Point) — 171 compliance/audit scoops at banks ≥1,000 in one call.
+
+---
+
+## 📐 Output Standard (mandatory — every run)
+
+Every run of this skill ends by rendering a standardized report, logging the run to Notion, and
+posting a summary to Microsoft Teams. Nothing in this section is hardcoded: signal coverage,
+source scoring, and the report format are all fetched fresh from Notion on every run.
+
+### A. Fetch the output template (format authority)
+
+Fetch this page fresh at the start of every run (Notion MCP `notion-fetch`):
+
+**Output Template — Broad Scan Digest** — `https://app.notion.com/p/3914e4751c3a81ac96dad69ef0711f8c`
+(in the **Skill References** database)
+
+The rendered run report must follow that page exactly — its Run Header, Sources Used table,
+Findings blocks, Run Summary, Skill Runs logging spec, and Teams summary spec. If the URL fails,
+locate the page with `notion-search` (query: `"Output Template — Broad Scan Digest"`). If it is
+still unavailable, render the report with the same section order (Header → Sources → Findings →
+Summary) and flag in the output that the template could not be fetched.
+
+### B. Compute signal coverage (never hardcode)
+
+This skill's detection mechanism: ICP-fit companies signalling practice-specific demand (pain
+points and planned projects), via ZoomInfo Scoops of type `Pain Point` and `Project` swept per
+Eclipse practice as a pseudo-intent feed.
+
+Resolve which Signal Library signals this run covers — fresh, on every run:
+
+1. Query the **Signal Library** data source
+   (`collection://3904e475-1c3a-8085-8c1e-000b40a34f87`, on the **02_Signal & Source Library**
+   page `https://app.notion.com/p/3904e4751c3a80b98da7c6bac9ca34c7`) with `notion-search` scoped
+   via `data_source_url`, using this skill's own name (`bdr-signal-painpoint-zoominfo`) and these coverage terms:
+   "pain point", "planned project", "pseudo-intent", "compliance pressure", "data initiative". (SQL
+   via `notion-query-data-sources` is plan-gated on this workspace — do not rely on it.)
+2. `notion-fetch` each candidate row. A row is **covered** if its Skill Coverage property
+   (currently named `TEMP - Skill Coverage`) names this skill, or its `Signal Definition` /
+   `Observable Evidence` clearly matches the detection mechanism above.
+3. Render the header line `**Coverage:** SIG-0XX — <Signal Name>; …` and keep each covered row's
+   **Why It Matters**, **Hidden Hypothesis**, **Eclipse Wedge**, **Recommended Disposition**, and
+   **Target Personas** — the report's Findings blocks must be grounded in these fields, not in
+   invented framing.
+
+If no row matches, render `**Coverage:** none mapped in Signal Library` and flag it for the team
+in the report and the Teams summary.
+
+### C. Compute source & source-type scoring (never hardcode)
+
+For every source actually consulted this run (the ZoomInfo platform: Scoops search plus `lookup`
+calls; contact pulls run through the bdr-fetch-contacts-from-company skill), build the template's
+**Sources Used** table:
+
+1. Resolve the source in the **Source Catalog**
+   (`collection://2485d7c1-f09c-46a4-abed-e6991c6932d8`) by `Source URL` or `Source Name`
+   (scoped `notion-search`, then `notion-fetch` the row) → get its `SRC-0XX` Source ID.
+2. Follow the row's **Source Type** relation into **Source Type Scoring**
+   (`collection://3904e475-1c3a-809b-92f8-000b78de539f`) and report the Source Type plus its
+   **Default Confidence Score**, **Default Source Reliability**, and **Default Signal Strength**.
+   If the Source Catalog row carries its own `Source Reliability` / `Default Source Strength`,
+   those per-source values override the type defaults.
+3. A consulted source with no Source Catalog row is still listed, flagged `⚠️ uncataloged`, with
+   best-judgment scores and a note asking the team to add it to the Source Catalog.
+
+Cache these lookups within a run (one lookup per distinct source) — never across runs.
+
+### D. Log the run to Skill Runs (Notion — mandatory, test runs included)
+
+Create one page per run in the **Skill Runs** database
+(`https://app.notion.com/p/3874e4751c3a8084a89be17b28e4c6a1`, data source
+`collection://3874e475-1c3a-80a1-8ed7-000ba308ec09`) via `notion-create-pages`:
+
+- **Name:** `bdr-signal-painpoint-zoominfo — <YYYY-MM-DD> — <short descriptor of the outcome>`
+- **Select:** `bdr-signal-painpoint-zoominfo`
+- **Multi-select:** provider(s) actually used this run (`Zoominfo`)
+- **Type:** `live run` (or `test run` for dry runs / tests)
+- **Page body:** the full rendered report from section A, followed by a toggle block containing
+  the run's raw JSON output.
+
+Keep the created page's URL — the Teams summary links to it.
+
+### E. Post the run summary to Teams (mandatory)
+
+Compose the short summary exactly per the template's Teams section (bold headline, 1-sentence
+outcome, top-3 bullets, link to the Skill Runs page) and deliver it by invoking the
+**bdr-post-to-teams** skill. Post even when the run found nothing — a clean-scan note with the
+coverage line is still a result.
 
 ---
 

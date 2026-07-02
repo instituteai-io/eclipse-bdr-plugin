@@ -18,6 +18,9 @@ description: >
   Triggers on: "scan this acquisition / merger / partnership / RFP / investor deck", "run the corp
   events scan", "who's acquiring / partnering / announced AI", "corporate event signal",
   "bdr-scan-corp-events", or a press-release / M&A / procurement / investor-relations URL.
+  Every run renders the standardized Notion output template, computes live signal/source coverage
+  from the Signal & Source Library, logs the run to the Skill Runs database, and posts a summary
+  to Teams.
 ---
 
 # Eclipse BDR — Corporate Events Scan (WebFetch)
@@ -25,6 +28,10 @@ description: >
 Fetch a pasted URL (or locate one from a company + event-type prompt), extract the corporate event,
 score it against Eclipse's ICP, and return structured signals plus a **newsletter digest** for email
 / team chat.
+
+> **Signal coverage:** computed fresh from the Signal Library on every run — never hardcoded.
+> Every run ends with the standardized report, a Skill Runs log entry in Notion, and a Teams
+> summary. See **📐 Output Standard** below.
 
 This is the **WebFetch twin of `bdr-signal-corp-events-zoominfo`**. The ZoomInfo version sweeps
 curated Scoops across the entire ICP in one call; this version reads **one pasted source at a time**
@@ -175,15 +182,18 @@ Render one block per signal:
 [Source](<source_url>)
 ```
 
-> **Delivery format is TBD** (email vs. team chat). Keep `digest.markdown` clean and channel-neutral;
-> `digest.channel` is a placeholder until the team picks the channel. To post it, hand
-> `digest.markdown` to `bdr-post-to-teams`.
+> **Delivery is resolved:** the run summary goes to Microsoft Teams via **bdr-post-to-teams**, and
+> the full report lives on the run's Skill Runs page (see 📐 Output Standard). The rendered digest
+> format is governed by the output template page fetched per section A of the Output Standard; the
+> block above is the fallback when the template page is unreachable.
 
 ---
 
 ## Step 7: Return JSON
 
-Output **only** this JSON — no prose before or after unless the user asks for a summary.
+Assemble this JSON payload — it feeds the Skill Runs log (embedded in a toggle block on the run's
+page) and any downstream handoff. The user-facing deliverable is the templated report plus the
+Skill Runs log entry and the Microsoft Teams summary (see 📐 Output Standard).
 
 ```json
 {
@@ -223,7 +233,7 @@ Output **only** this JSON — no prose before or after unless the user asks for 
   },
   "digest": {
     "format": "newsletter",
-    "channel": "TBD (email | team chat)",
+    "channel": "Microsoft Teams (via bdr-post-to-teams)",
     "title": "Corporate Event Signals — <scan_date>",
     "markdown": "<rendered digest per Step 6 — one block per included signal, high-priority first>"
   }
@@ -251,6 +261,95 @@ This skill is the **WebFetch arm** of a deliberate A/B with the ZoomInfo arm. Wh
   Scoops by a day or two.
 - **Precision** — both struggle most with the AI-announcement family; compare how cleanly each
   isolates a genuine AI initiative from generic product news.
+
+---
+
+## 📐 Output Standard (mandatory — every run)
+
+Every run of this skill ends by rendering a standardized report, logging the run to Notion, and
+posting a summary to Microsoft Teams. Nothing in this section is hardcoded: signal coverage,
+source scoring, and the report format are all fetched fresh from Notion on every run.
+
+### A. Fetch the output template (format authority)
+
+Fetch this page fresh at the start of every run (Notion MCP `notion-fetch`):
+
+**Output Template — Broad Scan Digest** — `https://app.notion.com/p/3914e4751c3a81ac96dad69ef0711f8c`
+(in the **Skill References** database)
+
+The rendered run report must follow that page exactly — its Run Header, Sources Used table,
+Findings blocks, Run Summary, Skill Runs logging spec, and Teams summary spec. If the URL fails,
+locate the page with `notion-search` (query: `"Output Template — Broad Scan Digest"`). If it is
+still unavailable, render the report with the same section order (Header → Sources → Findings →
+Summary) and flag in the output that the template could not be fetched.
+
+### B. Compute signal coverage (never hardcode)
+
+This skill's detection mechanism: corporate events (mergers & acquisitions, system-integrator
+partnerships, AI / GenAI announcements, public RFPs, investor-narrative filings) at ICP-fit
+companies, via WebFetch of a pasted press-release / procurement / investor-relations URL (or one
+located with WebSearch).
+
+Resolve which Signal Library signals this run covers — fresh, on every run:
+
+1. Query the **Signal Library** data source
+   (`collection://3904e475-1c3a-8085-8c1e-000b40a34f87`, on the **02_Signal & Source Library**
+   page `https://app.notion.com/p/3904e4751c3a80b98da7c6bac9ca34c7`) with `notion-search` scoped
+   via `data_source_url`, using this skill's own name (`bdr-scan-corp-events`) and these coverage terms:
+   "merger", "acquisition", "strategic partnership", "AI announcement", "public RFP", "investor
+   narrative". (SQL via `notion-query-data-sources` is plan-gated on this workspace — do not rely
+   on it.)
+2. `notion-fetch` each candidate row. A row is **covered** if its Skill Coverage property
+   (currently named `TEMP - Skill Coverage`) names this skill, or its `Signal Definition` /
+   `Observable Evidence` clearly matches the detection mechanism above.
+3. Render the header line `**Coverage:** SIG-0XX — <Signal Name>; …` and keep each covered row's
+   **Why It Matters**, **Hidden Hypothesis**, **Eclipse Wedge**, **Recommended Disposition**, and
+   **Target Personas** — the report's Findings blocks must be grounded in these fields, not in
+   invented framing.
+
+If no row matches, render `**Coverage:** none mapped in Signal Library` and flag it for the team
+in the report and the Teams summary.
+
+### C. Compute source & source-type scoring (never hardcode)
+
+For every source actually consulted this run (each press-release / procurement / investor-relations
+page fetched, plus WebSearch when used to locate the source), build the template's **Sources Used**
+table:
+
+1. Resolve the source in the **Source Catalog**
+   (`collection://2485d7c1-f09c-46a4-abed-e6991c6932d8`) by `Source URL` or `Source Name`
+   (scoped `notion-search`, then `notion-fetch` the row) → get its `SRC-0XX` Source ID.
+2. Follow the row's **Source Type** relation into **Source Type Scoring**
+   (`collection://3904e475-1c3a-809b-92f8-000b78de539f`) and report the Source Type plus its
+   **Default Confidence Score**, **Default Source Reliability**, and **Default Signal Strength**.
+   If the Source Catalog row carries its own `Source Reliability` / `Default Source Strength`,
+   those per-source values override the type defaults.
+3. A consulted source with no Source Catalog row is still listed, flagged `⚠️ uncataloged`, with
+   best-judgment scores and a note asking the team to add it to the Source Catalog.
+
+Cache these lookups within a run (one lookup per distinct source) — never across runs.
+
+### D. Log the run to Skill Runs (Notion — mandatory, test runs included)
+
+Create one page per run in the **Skill Runs** database
+(`https://app.notion.com/p/3874e4751c3a8084a89be17b28e4c6a1`, data source
+`collection://3874e475-1c3a-80a1-8ed7-000ba308ec09`) via `notion-create-pages`:
+
+- **Name:** `bdr-scan-corp-events — <YYYY-MM-DD> — <short descriptor of the outcome>`
+- **Select:** `bdr-scan-corp-events`
+- **Multi-select:** provider(s) actually used this run (`Web`)
+- **Type:** `live run` (or `test run` for dry runs / tests)
+- **Page body:** the full rendered report from section A, followed by a toggle block containing
+  the run's raw JSON output.
+
+Keep the created page's URL — the Teams summary links to it.
+
+### E. Post the run summary to Teams (mandatory)
+
+Compose the short summary exactly per the template's Teams section (bold headline, 1-sentence
+outcome, top-3 bullets, link to the Skill Runs page) and deliver it by invoking the
+**bdr-post-to-teams** skill. Post even when the run found nothing — a clean-scan note with the
+coverage line is still a result.
 
 ---
 

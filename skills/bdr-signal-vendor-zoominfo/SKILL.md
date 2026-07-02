@@ -18,6 +18,9 @@ description: >
   Triggers on: "which banks use Collibra/Snowflake/etc via zoominfo", "run the zoominfo vendor
   footprint scan", "zoominfo tool adoption signal", "harvest the install base",
   "bdr-signal-vendor-zoominfo".
+  Every run renders the standardized Notion output template, computes live signal/source coverage
+  from the Signal & Source Library, logs the run to the Skill Runs database, and posts a summary
+  to Teams.
 ---
 
 # Eclipse BDR — Signal: Vendor / Tool Footprint — ZoomInfo
@@ -26,6 +29,10 @@ Harvest the **install base** of Eclipse-relevant data tools directly from ZoomIn
 `techAttributeTagList` — answering *"which ICP-fit companies currently use Collibra / Alation /
 Informatica / Snowflake / Databricks / BigID / Monte Carlo / etc."* as a structured, ICP-filtered,
 contact-ready list. Output is a **newsletter digest**.
+
+> **Signal coverage:** computed fresh from the Signal Library on every run — never hardcoded.
+> Every run ends with the standardized report, a Skill Runs log entry in Notion, and a Teams
+> summary. See **📐 Output Standard** below.
 
 This is the ZoomInfo twin of `bdr-scan-vendor` (WebFetch). The web scan finds **net-new public
 evidence** (case studies, press, logos) for companies a vendor chooses to name; this scan returns
@@ -172,7 +179,10 @@ evidence):
 bank/insurer; `medium` = any Eclipse tool at an ICP-fit FS firm; `low` = adjacent tool or non-core
 vertical.
 
-Build a `digest` (only `relevance_score >= 5`, sorted desc). Starting shape (not a contract):
+Build a `digest` (only `relevance_score >= 5`, sorted desc). Delivery is the Microsoft Teams summary
+via **bdr-post-to-teams**, with the full report on the run's Skill Runs page; the rendered format is
+governed by the output template page fetched per section A of 📐 Output Standard. Starting shape
+(the fallback when the template page is unreachable):
 
 ```
 ## Vendor Footprint Signals (ZoomInfo) — <scan_date>
@@ -208,7 +218,9 @@ not logged.
 
 ## Step 8: Return JSON
 
-Output **only** this JSON — no prose before or after unless the user asks for a summary.
+Assemble this JSON payload — it feeds the Skill Runs log (embedded in a toggle block on the run's
+page) and any downstream handoff. The user-facing deliverable is the templated report plus the
+Skill Runs log entry and the Microsoft Teams summary (see 📐 Output Standard).
 
 ```json
 {
@@ -253,7 +265,7 @@ Output **only** this JSON — no prose before or after unless the user asks for 
   },
   "digest": {
     "format": "newsletter",
-    "channel": "TBD (email | team chat)",
+    "channel": "Microsoft Teams (via bdr-post-to-teams)",
     "title": "Vendor Footprint Signals (ZoomInfo) — <scan_date>",
     "markdown": "<rendered digest per Step 6 — one block per included signal, high-priority first>"
   }
@@ -277,6 +289,94 @@ Output **only** this JSON — no prose before or after unless the user asks for 
   + (optionally) a hiring or `Project` scoop to confirm the footprint is a live program.
 - **Contactability** — ZoomInfo companies carry `zoominfoCompanyId`, so contacts can be pulled in a
   follow-on pass; web-scraped names often need separate resolution.
+
+---
+
+## 📐 Output Standard (mandatory — every run)
+
+Every run of this skill ends by rendering a standardized report, logging the run to Notion, and
+posting a summary to Microsoft Teams. Nothing in this section is hardcoded: signal coverage,
+source scoring, and the report format are all fetched fresh from Notion on every run.
+
+### A. Fetch the output template (format authority)
+
+Fetch this page fresh at the start of every run (Notion MCP `notion-fetch`):
+
+**Output Template — Broad Scan Digest** — `https://app.notion.com/p/3914e4751c3a81ac96dad69ef0711f8c`
+(in the **Skill References** database)
+
+The rendered run report must follow that page exactly — its Run Header, Sources Used table,
+Findings blocks, Run Summary, Skill Runs logging spec, and Teams summary spec. If the URL fails,
+locate the page with `notion-search` (query: `"Output Template — Broad Scan Digest"`). If it is
+still unavailable, render the report with the same section order (Header → Sources → Findings →
+Summary) and flag in the output that the template could not be fetched.
+
+### B. Compute signal coverage (never hardcode)
+
+This skill's detection mechanism: the current install base of Eclipse-relevant data tools at
+ICP-fit companies, via ZoomInfo technographics (`search_companies` filtered by
+`techAttributeTagList` tech-product tags).
+
+Resolve which Signal Library signals this run covers — fresh, on every run:
+
+1. Query the **Signal Library** data source
+   (`collection://3904e475-1c3a-8085-8c1e-000b40a34f87`, on the **02_Signal & Source Library**
+   page `https://app.notion.com/p/3904e4751c3a80b98da7c6bac9ca34c7`) with `notion-search` scoped
+   via `data_source_url`, using this skill's own name (`bdr-signal-vendor-zoominfo`) and these coverage terms:
+   "vendor adoption", "tool footprint", "technographics", "data catalog", "cloud data platform".
+   (SQL via `notion-query-data-sources` is plan-gated on this workspace — do not rely on it.)
+2. `notion-fetch` each candidate row. A row is **covered** if its Skill Coverage property
+   (currently named `TEMP - Skill Coverage`) names this skill, or its `Signal Definition` /
+   `Observable Evidence` clearly matches the detection mechanism above.
+3. Render the header line `**Coverage:** SIG-0XX — <Signal Name>; …` and keep each covered row's
+   **Why It Matters**, **Hidden Hypothesis**, **Eclipse Wedge**, **Recommended Disposition**, and
+   **Target Personas** — the report's Findings blocks must be grounded in these fields, not in
+   invented framing.
+
+If no row matches, render `**Coverage:** none mapped in Signal Library` and flag it for the team
+in the report and the Teams summary.
+
+### C. Compute source & source-type scoring (never hardcode)
+
+For every source actually consulted this run (the ZoomInfo platform: company search with
+tech-product tags plus `lookup` calls, and the Apollo platform when the optional cross-check
+runs), build the template's **Sources Used** table:
+
+1. Resolve the source in the **Source Catalog**
+   (`collection://2485d7c1-f09c-46a4-abed-e6991c6932d8`) by `Source URL` or `Source Name`
+   (scoped `notion-search`, then `notion-fetch` the row) → get its `SRC-0XX` Source ID.
+2. Follow the row's **Source Type** relation into **Source Type Scoring**
+   (`collection://3904e475-1c3a-809b-92f8-000b78de539f`) and report the Source Type plus its
+   **Default Confidence Score**, **Default Source Reliability**, and **Default Signal Strength**.
+   If the Source Catalog row carries its own `Source Reliability` / `Default Source Strength`,
+   those per-source values override the type defaults.
+3. A consulted source with no Source Catalog row is still listed, flagged `⚠️ uncataloged`, with
+   best-judgment scores and a note asking the team to add it to the Source Catalog.
+
+Cache these lookups within a run (one lookup per distinct source) — never across runs.
+
+### D. Log the run to Skill Runs (Notion — mandatory, test runs included)
+
+Create one page per run in the **Skill Runs** database
+(`https://app.notion.com/p/3874e4751c3a8084a89be17b28e4c6a1`, data source
+`collection://3874e475-1c3a-80a1-8ed7-000ba308ec09`) via `notion-create-pages`:
+
+- **Name:** `bdr-signal-vendor-zoominfo — <YYYY-MM-DD> — <short descriptor of the outcome>`
+- **Select:** `bdr-signal-vendor-zoominfo`
+- **Multi-select:** provider(s) actually used this run (`Zoominfo`; add `Apollo` if the optional
+  Apollo cross-check (Step 4) ran)
+- **Type:** `live run` (or `test run` for dry runs / tests)
+- **Page body:** the full rendered report from section A, followed by a toggle block containing
+  the run's raw JSON output.
+
+Keep the created page's URL — the Teams summary links to it.
+
+### E. Post the run summary to Teams (mandatory)
+
+Compose the short summary exactly per the template's Teams section (bold headline, 1-sentence
+outcome, top-3 bullets, link to the Skill Runs page) and deliver it by invoking the
+**bdr-post-to-teams** skill. Post even when the run found nothing — a clean-scan note with the
+coverage line is still a result.
 
 ---
 
